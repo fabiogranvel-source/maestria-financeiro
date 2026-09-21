@@ -1,0 +1,9 @@
+{
+  "name": "Maestria Financeiro",
+  "short_name": "Maestria",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f4f0",
+  "theme_color": "#022c22",
+  "icons": []
+}

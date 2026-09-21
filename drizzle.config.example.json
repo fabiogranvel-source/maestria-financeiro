@@ -1,0 +1,7 @@
+{
+  "dialect": "postgresql",
+  "schema": "./src/db/schema.ts",
+  "dbCredentials": {
+    "url": "postgresql://USUARIO:SENHA@HOST:5432/NOME_DO_BANCO"
+  }
+}
