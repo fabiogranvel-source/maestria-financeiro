@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolConfig } from "pg";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -7,18 +7,40 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is required");
 }
 
-const globalForDb = globalThis as typeof globalThis & {
-  __arenaNextJsPostgresqlPool?: Pool;
+/**
+ * Hardening da conexão — Vercel (serverless) + Supabase Pooler.
+ *
+ * - SSL/TLS: obrigatório para Supabase (pooler/direct). Desligado apenas
+ *   quando o alvo é claramente local (127.0.0.1 / localhost) para o sandbox de dev.
+ * - Pool pequeno por instância: lambdas sobem várias instâncias quentes;
+ *   mantemos o total bem abaixo dos slots do pooler.
+ * - connectionTimeoutMillis: falha rápida em vez de requisição pendurada.
+ * - idleTimeoutMillis + allowExitOnIdle: libera conexões ociosas rápido
+ *   (essencial em serverless, evita esgotar slots do pooler).
+ * - Reuso do pool via globalThis: instância quente reaproveita o pool —
+ *   seguro porque o Pool é stateless por consulta e evita tempestade de conexões.
+ */
+const isLocalDb = /(?:@|\/\/)(?:127\.0\.0\.1|localhost)(?::|\/|$)/.test(databaseUrl);
+
+const poolConfig: PoolConfig = {
+  connectionString: databaseUrl,
+  ssl: isLocalDb ? undefined : { rejectUnauthorized: false },
+  max: 3,
+  min: 0,
+  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 20_000,
+  allowExitOnIdle: true,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10_000,
 };
 
-export const pool =
-  globalForDb.__arenaNextJsPostgresqlPool ??
-  new Pool({
-    connectionString: databaseUrl,
-  });
+const globalForDb = globalThis as typeof globalThis & {
+  __maestriaPgPool?: Pool;
+};
 
-if (process.env.NODE_ENV !== "production") {
-  globalForDb.__arenaNextJsPostgresqlPool = pool;
-}
+export const pool = globalForDb.__maestriaPgPool ?? new Pool(poolConfig);
+
+// Reuso seguro: em produção (lambda quente) e em dev (HMR), evita recriar o pool.
+globalForDb.__maestriaPgPool = pool;
 
 export const db = drizzle(pool);
