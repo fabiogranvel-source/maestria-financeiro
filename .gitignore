@@ -71,3 +71,8 @@ coverage/
 drizzle/*.db
 *.sqlite
 *.sqlite-journal
+
+# Backups locais do banco - NUNCA versionar (contem dados e hashes)
+backup.sql
+backup-*.sql
+*.backup.sql
