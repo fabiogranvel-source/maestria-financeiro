@@ -172,9 +172,18 @@ function ProjetosInner() {
                   <Mini label="A receber" cents={p.pendingCents} tone={p.pendingCents > 0 ? "text-amber-700" : ""} />
                   <Mini label="Lucro prev." cents={p.profitCents} tone={p.profitCents >= 0 ? "text-emerald-700" : "text-red-600"} />
                 </div>
-                <div className="mt-2.5 flex items-center justify-between border-t border-stone-100 pt-2.5 text-xs">
-                  <span className="font-bold text-stone-500">{projectStatusLabel(p.status)} · Margem {p.marginPct.toLocaleString("pt-BR")}%</span>
-                  <span className="font-bold text-stone-300">›</span>
+                <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-stone-100 pt-2.5 text-xs">
+                  <span className="truncate font-bold text-stone-500">{projectStatusLabel(p.status)} · Margem {p.marginPct.toLocaleString("pt-BR")}%</span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/projetos/${p.id}`; }}
+                      className="rounded-lg bg-stone-100 px-2.5 py-1.5 font-bold text-emerald-900 transition hover:bg-emerald-50"
+                      aria-label={`Editar projeto ${p.title}`}
+                    >
+                      Editar
+                    </button>
+                    <span className="font-bold text-stone-300">›</span>
+                  </span>
                 </div>
               </Card>
             </a>

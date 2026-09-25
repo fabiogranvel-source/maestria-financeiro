@@ -6,8 +6,8 @@ import { Card, Btn, Empty, Field, inputCls, Modal, Money, Skeleton, StatusPill, 
 
 type Detail = {
   project: {
-    id: number; clientName: string; clientPhone: string | null; title: string;
-    description: string | null; saleDate: string; totalValueCents: number;
+    id: number; clientId: number; archived?: string | null; clientName: string; clientPhone: string | null; title: string;
+    description: string | null; saleDate: string; totalValueCents: number; downPaymentCents: number;
     balanceMode: string; balanceDueDate: string | null; deliveryForecast: string | null;
     notes: string | null; status: string;
   };
@@ -28,6 +28,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [showCost, setShowCost] = useState(false);
   const [showCharge, setShowCharge] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteBlocked, setDeleteBlocked] = useState<string | null>(null);
+  const [clients, setClients] = useState<{ id: number; name: string }[]>([]);
+  const [editForm, setEditForm] = useState({
+    clientId: "", title: "", description: "", saleDate: "",
+    totalValue: "", downPayment: "", balanceMode: "on_delivery", balanceDueDate: "",
+    deliveryForecast: "", notes: "", status: "approved",
+  });
   const [payTarget, setPayTarget] = useState<{ id: number; open: number; desc: string } | null>(null);
   const [costPayTarget, setCostPayTarget] = useState<number | null>(null);
   const [reverseTarget, setReverseTarget] = useState<number | null>(null);
@@ -44,6 +52,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     load();
     api<{ categories: { id: number; name: string }[] }>("/api/meta").then((m) => setCats(m.categories)).catch(() => {});
+    api<{ id: number; name: string }[]>("/api/clients").then(setClients).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -185,6 +194,74 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     }
   }
 
+  const financialsLocked =
+    data !== null &&
+    (data.finance.receivedCents > 0 || data.payments.some((x) => !x.reversedAt));
+
+  function openEdit() {
+    if (!data) return;
+    setEditForm({
+      clientId: String(data.project.clientId ?? ""),
+      title: data.project.title || "",
+      description: data.project.description || "",
+      saleDate: data.project.saleDate || "",
+      totalValue: (data.finance.totalCents / 100).toFixed(2).replace(".", ","),
+      downPayment: (Number(data.project.downPaymentCents || 0) / 100).toFixed(2).replace(".", ","),
+      balanceMode: data.project.balanceMode || "on_delivery",
+      balanceDueDate: data.project.balanceDueDate || "",
+      deliveryForecast: data.project.deliveryForecast || "",
+      notes: data.project.notes || "",
+      status: data.project.status || "approved",
+    });
+    setShowEdit(true);
+  }
+
+  async function saveEdit() {
+    if (!editForm.title.trim()) return toast.show("Informe o nome do projeto.", "err");
+    setBusy(true);
+    try {
+      await api(`/api/projects/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          clientId: editForm.clientId ? Number(editForm.clientId) : undefined,
+          title: editForm.title.trim(),
+          description: editForm.description,
+          saleDate: editForm.saleDate,
+          totalValueCents: moneyToCentsInput(editForm.totalValue),
+          downPaymentCents: moneyToCentsInput(editForm.downPayment),
+          balanceMode: editForm.balanceMode,
+          balanceDueDate: editForm.balanceDueDate || null,
+          deliveryForecast: editForm.deliveryForecast || null,
+          notes: editForm.notes,
+          status: editForm.status,
+        }),
+      });
+      toast.show("Projeto atualizado com sucesso.");
+      setShowEdit(false);
+      load();
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : "Erro ao salvar.", "err");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmDelete() {
+    setBusy(true);
+    try {
+      await api(`/api/projects/${id}`, { method: "DELETE" });
+      toast.show("Projeto excluído com sucesso.");
+      window.location.href = "/projetos";
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Erro ao excluir.";
+      setDeleteBlocked(msg);
+      setShowDelete(false);
+      toast.show(msg, "err");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function uploadFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -218,16 +295,38 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const { project: p, finance: fn } = data;
+  const archived = !!p.archived;
 
   return (
     <div>
       <a href="/projetos" className="mb-2 inline-block text-sm font-bold text-stone-500 hover:text-stone-800">‹ Voltar para projetos</a>
+      {archived && (
+        <div className="mb-3 rounded-2xl border border-stone-200 bg-stone-50 p-4">
+          <p className="text-sm font-bold text-stone-700">Projeto arquivado</p>
+          <p className="mt-0.5 text-[13px] text-stone-500">
+            Este projeto foi excluído das listas operacionais, mas todo o histórico financeiro
+            (cobranças, pagamentos, custos e caixa) permanece preservado para consulta.
+          </p>
+        </div>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h1 className="text-2xl font-black uppercase tracking-tight">{p.clientName}</h1>
           <p className="text-sm text-stone-500">{p.title} · Venda em {formatDateBR(p.saleDate)}</p>
         </div>
-        <StatusPill tone="blue">{projectStatusLabel(p.status)}</StatusPill>
+        <div className="flex flex-wrap items-center gap-2">
+          {archived ? (
+            <StatusPill tone="gray">Arquivado</StatusPill>
+          ) : (
+            <StatusPill tone="blue">{projectStatusLabel(p.status)}</StatusPill>
+          )}
+          {!archived && (
+            <>
+              <Btn variant="secondary" onClick={openEdit} className="!min-h-[40px]">Editar projeto</Btn>
+              <Btn variant="danger" onClick={() => setShowDelete(true)} className="!min-h-[40px]">Excluir projeto</Btn>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Resumo financeiro */}
@@ -575,6 +674,171 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         danger
         busy={busy}
       />
+
+      {/* ===== Editar projeto ===== */}
+      <Modal open={showEdit} onClose={() => setShowEdit(false)} title="Editar projeto" wide>
+        <div className="space-y-3">
+          {financialsLocked && (
+            <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-[13px] font-semibold leading-relaxed text-amber-800">
+              Existem pagamentos recebidos neste projeto. Os valores financeiros da venda não podem
+              mais ser alterados diretamente. Se necessário, estorne o pagamento e tente novamente.
+              Os demais campos continuam editáveis.
+            </p>
+          )}
+
+          <Field label="Cliente">
+            <select
+              value={editForm.clientId}
+              onChange={(e) => setEditForm({ ...editForm, clientId: e.target.value })}
+              className={inputCls}
+            >
+              <option value="">Selecione o cliente</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Nome do projeto">
+            <input
+              value={editForm.title}
+              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+              placeholder="Ex: Cozinha planejada"
+              className={inputCls}
+            />
+          </Field>
+
+          <Field label="Descrição">
+            <textarea
+              value={editForm.description}
+              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+              rows={2}
+              className={`${inputCls} min-h-[70px] resize-y`}
+            />
+          </Field>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Data da venda">
+              <input
+                type="date"
+                value={editForm.saleDate}
+                onChange={(e) => setEditForm({ ...editForm, saleDate: e.target.value })}
+                className={inputCls}
+              />
+            </Field>
+            <Field label="Status">
+              <select
+                value={editForm.status}
+                onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                className={inputCls}
+              >
+                <option value="approved">Aprovado</option>
+                <option value="measuring">Aguardando medição</option>
+                <option value="production">Em produção</option>
+                <option value="ready">Pronto para instalação</option>
+                <option value="installing">Instalando</option>
+                <option value="delivered">Entregue</option>
+                <option value="finished">Finalizado</option>
+              </select>
+            </Field>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Valor total da venda">
+              <input
+                value={editForm.totalValue}
+                onChange={(e) => setEditForm({ ...editForm, totalValue: e.target.value })}
+                inputMode="decimal"
+                placeholder="0,00"
+                disabled={financialsLocked}
+                className={`${inputCls} ${financialsLocked ? "cursor-not-allowed bg-stone-100 text-stone-400" : ""}`}
+              />
+            </Field>
+            <Field label="Valor da entrada">
+              <input
+                value={editForm.downPayment}
+                onChange={(e) => setEditForm({ ...editForm, downPayment: e.target.value })}
+                inputMode="decimal"
+                placeholder="0,00"
+                disabled={financialsLocked}
+                className={`${inputCls} ${financialsLocked ? "cursor-not-allowed bg-stone-100 text-stone-400" : ""}`}
+              />
+            </Field>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Condição do saldo">
+              <select
+                value={editForm.balanceMode}
+                onChange={(e) => setEditForm({ ...editForm, balanceMode: e.target.value })}
+                className={inputCls}
+                disabled={financialsLocked}
+              >
+                <option value="on_delivery">Na entrega</option>
+                <option value="fixed_date">Data definida</option>
+                <option value="installments">Parcelado</option>
+                <option value="undefined">A definir</option>
+              </select>
+            </Field>
+            <Field label="Vencimento do saldo">
+              <input
+                type="date"
+                value={editForm.balanceDueDate}
+                onChange={(e) => setEditForm({ ...editForm, balanceDueDate: e.target.value })}
+                className={inputCls}
+              />
+            </Field>
+          </div>
+
+          <Field label="Previsão de entrega">
+            <input
+              type="date"
+              value={editForm.deliveryForecast}
+              onChange={(e) => setEditForm({ ...editForm, deliveryForecast: e.target.value })}
+              className={inputCls}
+            />
+          </Field>
+
+          <Field label="Observações">
+            <textarea
+              value={editForm.notes}
+              onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+              rows={3}
+              className={`${inputCls} min-h-[88px] resize-y`}
+            />
+          </Field>
+
+          <div className="flex gap-2 pt-1">
+            <Btn variant="secondary" className="flex-1" onClick={() => setShowEdit(false)}>Cancelar</Btn>
+            <Btn className="flex-1" onClick={saveEdit} disabled={busy}>
+              {busy ? "Salvando…" : "Salvar alterações"}
+            </Btn>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ===== Excluir projeto ===== */}
+      <ConfirmModal
+        open={showDelete}
+        onClose={() => setShowDelete(false)}
+        onConfirm={confirmDelete}
+        title="Excluir projeto"
+        message="Tem certeza que deseja excluir este projeto?"
+        confirmLabel="Excluir projeto"
+        danger
+        busy={busy}
+      />
+
+      {deleteBlocked && (
+        <Modal open={!!deleteBlocked} onClose={() => setDeleteBlocked(null)} title="Exclusão bloqueada">
+          <p className="text-[15px] leading-relaxed text-stone-600">{deleteBlocked}</p>
+          <p className="mt-2 rounded-xl bg-stone-50 px-3 py-2 text-[13px] text-stone-500">
+            Nenhum registro financeiro foi apagado. O projeto e todo o seu histórico permanecem preservados.
+          </p>
+          <Btn className="mt-4 w-full" onClick={() => setDeleteBlocked(null)}>Entendi</Btn>
+        </Modal>
+      )}
+
       {toast.el}
     </div>
   );

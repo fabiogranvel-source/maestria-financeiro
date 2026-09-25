@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { projects, clients, projectCosts, expenses, receivables } from "@/db/schema";
 import { requireUser, jsonOk, jsonError, AuthError } from "@/lib/auth";
-import { eq, ilike, or, desc } from "drizzle-orm";
+import { eq, ilike, or, desc, and, isNull } from "drizzle-orm";
 
 export async function GET(req: Request) {
   try {
@@ -15,7 +15,12 @@ export async function GET(req: Request) {
       .select({ id: projects.id, title: projects.title, clientName: clients.name, status: projects.status, totalValueCents: projects.totalValueCents })
       .from(projects)
       .innerJoin(clients, eq(clients.id, projects.clientId))
-      .where(or(ilike(projects.title, like), ilike(clients.name, like), ilike(projects.description, like)))
+      .where(
+        and(
+          isNull(projects.deletedAt),
+          or(ilike(projects.title, like), ilike(clients.name, like), ilike(projects.description, like))
+        )
+      )
       .orderBy(desc(projects.id))
       .limit(10);
 
@@ -36,7 +41,8 @@ export async function GET(req: Request) {
     const recs = await db
       .select({ id: receivables.id, description: receivables.description, amountCents: receivables.amountCents, status: receivables.status, projectId: receivables.projectId })
       .from(receivables)
-      .where(ilike(receivables.description, like))
+      .innerJoin(projects, eq(projects.id, receivables.projectId))
+      .where(and(isNull(projects.deletedAt), ilike(receivables.description, like)))
       .orderBy(desc(receivables.id))
       .limit(10);
 

@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { receivables, projects, clients } from "@/db/schema";
 import { requireUser, jsonOk, jsonError, AuthError, audit } from "@/lib/auth";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, isNull } from "drizzle-orm";
 
 // Lista geral (contas a receber) + criação avulsa de cobrança
 export async function GET() {
@@ -26,6 +26,8 @@ export async function GET() {
       .from(receivables)
       .innerJoin(projects, eq(projects.id, receivables.projectId))
       .innerJoin(clients, eq(clients.id, receivables.clientId))
+      // Projetos arquivados não aparecem como cobrança operacional ativa.
+      .where(isNull(projects.deletedAt))
       .orderBy(desc(receivables.id));
     return jsonOk(
       rows.map((r) => ({

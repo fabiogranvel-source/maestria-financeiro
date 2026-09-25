@@ -35,6 +35,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const r = rec[0];
     if (r.status === "cancelled") return jsonError("Esta cobrança está cancelada.");
 
+    // Projeto arquivado não pode gerar novo recebimento (histórico permanece intacto).
+    const proj = await db.select().from(projects).where(eq(projects.id, r.projectId)).limit(1);
+    if (proj.length > 0 && proj[0].deletedAt) {
+      return jsonError("O projeto desta cobrança está arquivado e não pode receber pagamentos.", 409);
+    }
+
     const open = Number(r.amountCents) - Number(r.receivedCents);
     // confirmação se ultrapassar: o front pede confirmação; aqui permitimos com flag
     const confirmed = !!body.confirmedOverpay;
