@@ -89,7 +89,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </div>
         <nav className="mt-3 flex-1 space-y-1 overflow-y-auto px-3">
           {[
-            ...NAV.slice(0, 4),
+            ...NAV.slice(0, 2),
+            { href: "/clientes", label: "Clientes", icon: "◉" },
+            ...NAV.slice(2, 4),
             { href: "/fluxo", label: "Fluxo de caixa", icon: "≋" },
             { href: "/resultado", label: "Resultado mensal", icon: "◍" },
             { href: "/projecao", label: "Projeções", icon: "↗" },

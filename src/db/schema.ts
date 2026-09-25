@@ -35,8 +35,10 @@ export const sessions = pgTable("sessions", {
 export const clients = pgTable("clients", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  cpfCnpj: text("cpf_cnpj"),
   phone: text("phone"),
   email: text("email"),
+  address: text("address"),
   notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

@@ -93,6 +93,7 @@ export default function MaisPage() {
       <PageHeader title="Mais" subtitle="Configurações e cadastros" />
 
       <div className="grid gap-3 sm:grid-cols-2">
+        <a href="/clientes"><Card className="p-4 transition hover:border-emerald-900"><p className="text-xl">◉</p><p className="mt-1 font-bold">Clientes</p></Card></a>
         <a href="/fluxo"><Card className="p-4 transition hover:border-emerald-900"><p className="text-xl">≋</p><p className="mt-1 font-bold">Fluxo de caixa</p></Card></a>
         <a href="/resultado"><Card className="p-4 transition hover:border-emerald-900"><p className="text-xl">◍</p><p className="mt-1 font-bold">Resultado mensal</p></Card></a>
         <a href="/projecao"><Card className="p-4 transition hover:border-emerald-900"><p className="text-xl">↗</p><p className="mt-1 font-bold">Projeções</p></Card></a>
